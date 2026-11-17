@@ -120,10 +120,15 @@ from pipecat.services.openrouter.llm import (
 )
 from pipecat.services.openrouter.llm import OpenRouterLLMSettings
 from pipecat.services.rime.tts import RimeTTSService, RimeTTSSettings
+from websockets.protocol import State
 from pipecat.services.sarvam.llm import SarvamLLMService as BaseSarvamLLMService
 from pipecat.services.sarvam.llm import SarvamLLMSettings
 from pipecat.services.sarvam.stt import SarvamSTTService, SarvamSTTSettings
-from pipecat.services.sarvam.tts import SarvamTTSService, SarvamTTSSettings
+from pipecat.services.sarvam.tts import (
+    SarvamTTSService as BaseSarvamTTSService,
+    SarvamTTSSettings,
+    detect_script_language,
+)
 from pipecat.services.smallest.stt import SmallestSTTService, SmallestSTTSettings
 from pipecat.services.smallest.tts import SmallestTTSService, SmallestTTSSettings
 from pipecat.services.soniox.stt import (
@@ -337,6 +342,72 @@ class OpenRouterLLMService(OpenAISpokenToolCallMixin, BaseOpenRouterLLMService):
 
 class SarvamLLMService(OpenAISpokenToolCallMixin, BaseSarvamLLMService):
     """Sarvam streaming service with spoken-tool recovery."""
+
+
+class SarvamTTSService(BaseSarvamTTSService):
+    """Sarvam streaming TTS service with dynamic script detection and language switching."""
+
+    async def _send_config(self):
+        """Send initial or updated configuration message."""
+        if not self._websocket:
+            raise Exception("WebSocket not connected")
+        lang = self._settings.language
+        if isinstance(lang, Language):
+            target_lang = self.language_to_service_language(lang) or "hi-IN"
+        elif isinstance(lang, str):
+            target_lang = lang
+        else:
+            target_lang = "hi-IN"
+
+        config_data = {
+            "target_language_code": target_lang,
+            "speaker": self._settings.voice,
+            "speech_sample_rate": self._speech_sample_rate,
+            "enable_preprocessing": self._settings.enable_preprocessing,
+            "min_buffer_size": self._settings.min_buffer_size,
+            "max_chunk_length": self._settings.max_chunk_length,
+            "output_audio_codec": self._output_audio_codec,
+            "output_audio_bitrate": self._output_audio_bitrate,
+            "pace": self._settings.pace,
+            "model": self._settings.model,
+        }
+        if self._config.supports_pitch and self._settings.pitch is not None:
+            config_data["pitch"] = self._settings.pitch
+        if self._config.supports_loudness and self._settings.loudness is not None:
+            config_data["loudness"] = self._settings.loudness
+        if self._config.supports_temperature and self._settings.temperature is not None:
+            config_data["temperature"] = self._settings.temperature
+        logger.debug(f"Config being sent is {config_data}")
+        config_message = {"type": "config", "data": config_data}
+
+        try:
+            await self._websocket.send(json.dumps(config_message))
+            logger.debug("Configuration sent successfully")
+        except Exception as e:
+            await self.push_error(error_msg=f"Unknown error occurred: {e}", exception=e)
+            raise
+
+    async def _send_text(self, text: str):
+        """Send text to Sarvam WebSocket with auto language switching based on script."""
+        if self._websocket and self._websocket.state == State.OPEN:
+            detected_lang = detect_script_language(text)
+            curr_lang = (
+                self.language_to_service_language(self._settings.language)
+                if isinstance(self._settings.language, Language)
+                else (self._settings.language or "hi-IN")
+            )
+            if detected_lang and detected_lang != curr_lang:
+                logger.info(
+                    f"Auto-switching Sarvam TTS language from {curr_lang} to {detected_lang}"
+                )
+                self._settings.language = detected_lang
+                await self._send_config()
+
+            msg = {"type": "text", "data": {"text": text}}
+            await self._websocket.send(json.dumps(msg))
+        else:
+            logger.warning("WebSocket not ready, cannot send text")
+
 
 
 class SpeachesLLMService(OpenAISpokenToolCallMixin, BaseSpeachesLLMService):

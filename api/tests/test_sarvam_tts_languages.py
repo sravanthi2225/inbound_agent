@@ -25,3 +25,14 @@ def test_sarvam_tts_offers_only_languages_sarvam_can_speak():
         "examples"
     ]
     assert offered and set(offered) <= SARVAM_TTS_SUPPORTED
+
+
+def test_sarvam_tts_auto_detects_language_script():
+    from pipecat.services.sarvam.tts import detect_script_language
+
+    assert detect_script_language("నమస్కారం, డాక్టర్ శర్మతో అపాయింట్‌మెంట్ కావాలి") == "te-IN"
+    assert detect_script_language("नमस्ते, डॉक्टर से मिलना है") == "hi-IN"
+    assert detect_script_language("I want to book an appointment") == "en-IN"
+    assert detect_script_language("வணக்கம்") == "ta-IN"
+    assert detect_script_language("ನಮಸ್ಕಾರ") == "kn-IN"
+
