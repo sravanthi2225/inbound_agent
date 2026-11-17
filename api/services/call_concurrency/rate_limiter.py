@@ -41,7 +41,7 @@ class RateLimiter:
 
     def _mark_redis_down(self, exc: Exception) -> None:
         logger.warning(f"Redis unavailable ({exc}), using in-memory concurrency fallback")
-        self._redis_down_until = time.time() + 10.0
+        self._redis_down_until = time.time() + 300.0
 
     def _mem_prune_slots(self, key: str, stale_cutoff: float) -> dict[str, float]:
         slots = self._memory_slots.get(key, {})
@@ -140,7 +140,7 @@ class RateLimiter:
         """Get or create Redis connection"""
         if self.redis_client is None:
             self.redis_client = await aioredis.from_url(
-                REDIS_URL, decode_responses=True
+                REDIS_URL, decode_responses=True, socket_connect_timeout=0.5, socket_timeout=0.5
             )
         return self.redis_client
 
