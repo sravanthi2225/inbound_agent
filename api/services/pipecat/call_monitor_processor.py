@@ -18,7 +18,9 @@ from pipecat.frames.frames import (
     FunctionCallResultFrame,
     FunctionCallsStartedFrame,
     HeartbeatFrame,
+    InterimTranscriptionFrame,
     StartFrame,
+    TranscriptionFrame,
     UserStartedSpeakingFrame,
     UserStoppedSpeakingFrame,
 )
@@ -275,6 +277,10 @@ class CallMonitorProcessor(FrameProcessor):
             self._user_started()
         elif isinstance(frame, UserStoppedSpeakingFrame):
             self._user_stopped()
+        elif isinstance(frame, (TranscriptionFrame, InterimTranscriptionFrame)):
+            if getattr(frame, "text", "").strip():
+                self._user_started()
+                self._confirm_user_response()
         elif isinstance(frame, (BotStartedSpeakingFrame, BotSpeakingFrame)):
             self._bot_speaking = True
             if self._deadline_kind == "idle":

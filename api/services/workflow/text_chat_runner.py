@@ -554,6 +554,7 @@ async def execute_text_chat_pending_turn(
     initial_context = {
         **base_initial_context,
         "workflow_run_id": workflow_run_id,
+        "workflow_id": workflow.id,
     }
     if mps_correlation_id:
         initial_context[MPS_CORRELATION_ID_CONTEXT_KEY] = mps_correlation_id

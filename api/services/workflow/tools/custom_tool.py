@@ -433,6 +433,12 @@ async def execute_http_tool(
 
     initial_context = dict(call_context_vars or {})
     gathered_context = dict(gathered_context_vars or {})
+
+    # Auto-populate workflow_id from context for internal endpoints when not explicitly passed by LLM
+    if "workflow_id" not in resolved_arguments or resolved_arguments["workflow_id"] is None:
+        wf_id = initial_context.get("workflow_id") or gathered_context.get("workflow_id")
+        if wf_id is not None:
+            resolved_arguments["workflow_id"] = wf_id
     # Unprefixed URL variables follow LLM > gathered > initial precedence.
     # Preset aliases are context-derived fallbacks; explicit namespaces keep
     # the original context maps available regardless of name collisions.
@@ -488,6 +494,10 @@ async def execute_http_tool(
                     "gathered_context": gathered_context,
                 },
             )
+        if isinstance(body, dict) and ("workflow_id" not in body or body["workflow_id"] is None):
+            wf_id = initial_context.get("workflow_id") or gathered_context.get("workflow_id")
+            if wf_id is not None:
+                body["workflow_id"] = wf_id
         _request_body_preview = body
     elif method in ("GET", "DELETE") and resolved_arguments:
         params = serialize_query_params(resolved_arguments)

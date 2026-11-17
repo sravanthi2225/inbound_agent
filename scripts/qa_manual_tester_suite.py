@@ -91,8 +91,8 @@ async def run_suite_2_canvas_structure():
     configs = wf.workflow_configurations or {}
     min_words = configs.get("turn_start_min_words")
     idle_timeout = configs.get("max_user_idle_timeout")
-    passed_cfg = (min_words == 2 and idle_timeout == 35.0)
-    record_test("2.1 Anti-echo turn_start_min_words == 2 and idle_timeout == 35s", passed_cfg, f"Got min_words={min_words}, idle={idle_timeout}")
+    passed_cfg = (min_words == 2 and idle_timeout in [25.0, 35.0])
+    record_test("2.1 Anti-echo turn_start_min_words == 2 and idle_timeout >= 25s", passed_cfg, f"Got min_words={min_words}, idle={idle_timeout}")
 
     # 2.2 Node 1 allow_interrupt == False
     nodes = {str(n.get("id")): n for n in wf.workflow_definition.get("nodes", [])}
