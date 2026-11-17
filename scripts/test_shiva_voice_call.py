@@ -128,6 +128,9 @@ async def main():
         logger.info(f"Final audio frames count: {len(frames)}")
         assert len(frames) > 0, "No audio frames received from voice agent!"
         logger.info("E2E VOICE CALL TEST PASSED SUCCESSFULLY FOR SHIVAPRASAD!")
+        return len(frames)
+
+run_test_call = main
 
 if __name__ == "__main__":
     asyncio.run(main())

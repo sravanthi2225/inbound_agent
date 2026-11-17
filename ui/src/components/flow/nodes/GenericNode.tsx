@@ -83,7 +83,18 @@ function seedValues(
     const d = data as unknown as Record<string, unknown>;
     const out: Record<string, unknown> = {};
     for (const prop of spec.properties) {
-        out[prop.name] = d[prop.name] ?? prop.default ?? undefined;
+        let val = d[prop.name] ?? prop.default ?? undefined;
+        if (prop.name === "tool_uuids" && (!val || (Array.isArray(val) && val.length === 0))) {
+            if (Array.isArray(d["tools"]) && d["tools"].length > 0) {
+                val = d["tools"];
+            }
+        }
+        if (prop.name === "document_uuids" && (!val || (Array.isArray(val) && val.length === 0))) {
+            if (Array.isArray(d["documents"]) && d["documents"].length > 0) {
+                val = d["documents"];
+            }
+        }
+        out[prop.name] = val;
     }
     return out;
 }
@@ -286,32 +297,48 @@ function CanvasPreview({
     // Default: prompt preview + tool/document badges (when spec declares them).
     const hasToolRefs = spec.properties.some((p) => p.type === "tool_refs");
     const hasDocRefs = spec.properties.some((p) => p.type === "document_refs");
+    const rawTools = (data as Record<string, unknown>).tools;
+    const toolUuids: string[] = (
+        Array.isArray(data.tool_uuids) && data.tool_uuids.length > 0
+            ? data.tool_uuids
+            : Array.isArray(rawTools)
+            ? (rawTools as string[])
+            : []
+    );
+    const rawDocs = (data as Record<string, unknown>).documents;
+    const documentUuids: string[] = (
+        Array.isArray(data.document_uuids) && data.document_uuids.length > 0
+            ? data.document_uuids
+            : Array.isArray(rawDocs)
+            ? (rawDocs as string[])
+            : []
+    );
     return (
         <>
             <p className="text-sm text-muted-foreground line-clamp-5 leading-relaxed">
                 {data.prompt || "No prompt configured"}
             </p>
-            {hasToolRefs && data.tool_uuids && data.tool_uuids.length > 0 && (
+            {hasToolRefs && toolUuids.length > 0 && (
                 <div className="mt-3 pt-3 border-t border-border/50">
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
                         <LucideIcons.Wrench className="h-3 w-3" />
                         <span>Tools:</span>
                     </div>
                     <ToolBadges
-                        toolUuids={data.tool_uuids}
+                        toolUuids={toolUuids}
                         onStaleUuidsDetected={onStaleTools}
                         mcpToolFilters={data.mcp_tool_filters}
                     />
                 </div>
             )}
-            {hasDocRefs && data.document_uuids && data.document_uuids.length > 0 && (
+            {hasDocRefs && documentUuids.length > 0 && (
                 <div className="mt-3 pt-3 border-t border-border/50">
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
                         <LucideIcons.FileText className="h-3 w-3" />
                         <span>Documents:</span>
                     </div>
                     <DocumentBadges
-                        documentUuids={data.document_uuids}
+                        documentUuids={documentUuids}
                         onStaleUuidsDetected={onStaleDocuments}
                     />
                 </div>
@@ -587,9 +614,20 @@ export const GenericNode = memo(({ data, selected, id, type }: GenericNodeProps)
 
     const handleSave = async () => {
         if (!spec) return;
+        const formValues = { ...(values as Partial<FlowNodeData> & Record<string, unknown>) };
+        if (formValues.tool_uuids !== undefined) {
+            formValues.tools = formValues.tool_uuids;
+        } else if (formValues.tools !== undefined) {
+            formValues.tool_uuids = formValues.tools;
+        }
+        if (formValues.document_uuids !== undefined) {
+            formValues.documents = formValues.document_uuids;
+        } else if (formValues.documents !== undefined) {
+            formValues.document_uuids = formValues.documents;
+        }
         handleSaveNodeData({
             ...data,
-            ...(values as Partial<FlowNodeData>),
+            ...formValues,
         });
         setOpen(false);
         await saveWorkflow();

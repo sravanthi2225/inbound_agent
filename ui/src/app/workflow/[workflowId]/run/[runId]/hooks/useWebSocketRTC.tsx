@@ -357,9 +357,16 @@ export const useWebSocketRTC = ({ workflowId, workflowRunId, accessToken, initia
             };
 
             ws.onclose = (event) => {
-                logger.info('WebSocket closed');
+                logger.info(`WebSocket closed: code=${event.code}, reason=${event.reason}`);
                 wsRef.current = null;
-                if (event.reason === 'call ended') {
+                const isNormalClosure = (
+                    event.code === 1000 ||
+                    event.reason === 'call ended' ||
+                    event.reason === 'peer_connection_closed' ||
+                    isCompletedRef.current ||
+                    gracefulDisconnectRef.current
+                );
+                if (isNormalClosure) {
                     cleanupConnection({
                         graceful: true,
                         status: 'idle',

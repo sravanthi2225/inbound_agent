@@ -454,7 +454,7 @@ async def execute_http_tool(
             import os
             internal_url = os.environ.get("INTERNAL_API_URL")
             if not internal_url:
-                port = os.environ.get("PORT", "8000")
+                port = os.environ.get("PORT", "8500")
                 internal_url = f"http://127.0.0.1:{port}"
             url = f"{internal_url.rstrip('/')}{url}"
         _rendered_url = url

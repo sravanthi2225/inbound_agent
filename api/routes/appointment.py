@@ -22,9 +22,16 @@ router = APIRouter(prefix="/appointments", tags=["appointments"])
 # -----------------------------------------------------------------------------
 
 class PublicBookingRequest(BaseModel):
-    workflow_id: int = Field(..., description="Target Agent/Workflow ID")
-    customer_name: str = Field(..., description="Customer full name")
-    customer_phone: str = Field(..., description="Customer phone number")
+    workflow_id: Optional[int] = Field(None, description="Target Agent/Workflow ID")
+    customer_name: Optional[str] = Field(None, description="Customer full name")
+    customer_phone: Optional[str] = Field(None, description="Customer phone number")
+    patient_name: Optional[str] = Field(None, description="Alias for customer_name")
+    mobile_number: Optional[str] = Field(None, description="Alias for customer_phone")
+    branch: Optional[str] = Field(None, description="Hospital branch")
+    department: Optional[str] = Field(None, description="Hospital department")
+    doctor_or_department: Optional[str] = Field(None, description="Doctor or department")
+    age: Optional[str] = Field(None, description="Patient age")
+    gender: Optional[str] = Field(None, description="Patient gender")
     customer_email: Optional[str] = Field(None, description="Optional customer email")
     appointment_date: Optional[str] = Field(None, description="YYYY-MM-DD")
     appointment_time: Optional[str] = Field(None, description="HH:MM (e.g. 10:00)")
@@ -35,14 +42,19 @@ class PublicBookingRequest(BaseModel):
 
 
 class CancelBookingRequest(BaseModel):
-    appointment_code: str = Field(..., description="Appointment code (e.g. APT-B2841)")
+    appointment_code: Optional[str] = Field(None, description="Appointment code (e.g. APT-B2841)")
+    appointment_code_or_mobile: Optional[str] = Field(None, description="Code or registered mobile")
+    action: Optional[str] = Field("cancel", description="cancel")
     reason: Optional[str] = Field(None, description="Reason for cancellation")
 
 
 class RescheduleBookingRequest(BaseModel):
-    appointment_code: str = Field(..., description="Appointment code")
-    new_date: str = Field(..., description="New date (YYYY-MM-DD)")
-    new_time: str = Field(..., description="New time (HH:MM)")
+    appointment_code: Optional[str] = Field(None, description="Appointment code")
+    appointment_code_or_mobile: Optional[str] = Field(None, description="Code or registered mobile")
+    action: Optional[str] = Field("reschedule", description="cancel | reschedule")
+    new_date: Optional[str] = Field(None, description="New date (YYYY-MM-DD)")
+    new_time: Optional[str] = Field(None, description="New time (HH:MM)")
+    reason: Optional[str] = Field(None, description="Optional reason")
 
 
 class WhatsAppConfirmationRequest(BaseModel):
@@ -77,14 +89,24 @@ class BookingConfigUpdateRequest(BaseModel):
 
 @router.get("/availability")
 async def check_availability(
-    workflow_id: int = Query(..., description="Workflow ID"),
+    workflow_id: Optional[int] = Query(None, description="Workflow ID"),
     date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format"),
+    branch: Optional[str] = Query(None, description="Hospital branch"),
+    department: Optional[str] = Query(None, description="Department or specialty"),
+    doctor_name: Optional[str] = Query(None, description="Doctor name"),
 ):
-    """Check open slots for an agent on a specific date (accessible by external websites)."""
+    """Check open slots for an agent on a specific date (accessible by external websites and AI tools)."""
     try:
         from datetime import UTC, datetime
         date_str = date or datetime.now(UTC).strftime("%Y-%m-%d")
-        slots_data = await db_client.get_available_slots(workflow_id=workflow_id, date_str=date_str)
+        effective_wf_id = workflow_id if workflow_id is not None else 8
+        slots_data = await db_client.get_available_slots(workflow_id=effective_wf_id, date_str=date_str)
+        if branch:
+            slots_data["branch"] = branch
+        if department:
+            slots_data["department"] = department
+        if doctor_name:
+            slots_data["doctor_name"] = doctor_name
         return slots_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -114,14 +136,23 @@ async def book_appointment(req: PublicBookingRequest):
         from datetime import UTC, datetime
         appt_date = req.appointment_date or datetime.now(UTC).strftime("%Y-%m-%d")
         appt_time = req.appointment_time or "10:00"
+        effective_wf_id = req.workflow_id if req.workflow_id is not None else 8
+        cust_name = req.customer_name or req.patient_name or "Guest Patient"
+        cust_phone = req.customer_phone or req.mobile_number or "+919999999999"
+        dept_info = req.doctor_or_department or req.department or req.service_type or "General Consultation"
+        if req.branch and req.branch not in dept_info:
+            svc_type = f"{dept_info} - {req.branch}"
+        else:
+            svc_type = dept_info
+
         appointment = await db_client.book_appointment(
-            workflow_id=req.workflow_id,
-            customer_name=req.customer_name,
-            customer_phone=req.customer_phone,
+            workflow_id=effective_wf_id,
+            customer_name=cust_name,
+            customer_phone=cust_phone,
             appointment_date=appt_date,
             appointment_time=appt_time,
             customer_email=req.customer_email,
-            service_type=req.service_type or "General Consultation",
+            service_type=svc_type,
             notes=req.notes,
             booking_source=req.booking_source or "voice_call",
             workflow_run_id=req.workflow_run_id,
@@ -145,10 +176,13 @@ async def book_appointment(req: PublicBookingRequest):
 
 @router.post("/cancel")
 async def cancel_appointment(req: CancelBookingRequest):
-    """Cancel an appointment by code."""
-    apt = await db_client.cancel_appointment_by_code(req.appointment_code, req.reason)
+    """Cancel an appointment by code or registered mobile."""
+    code_or_mobile = req.appointment_code or req.appointment_code_or_mobile
+    if not code_or_mobile:
+        raise HTTPException(status_code=422, detail="Appointment code or mobile number is required.")
+    apt = await db_client.cancel_appointment_by_code(code_or_mobile, req.reason)
     if not apt:
-        raise HTTPException(status_code=404, detail="Appointment code not found.")
+        raise HTTPException(status_code=404, detail=f"Appointment {code_or_mobile} not found.")
     return {
         "success": True,
         "appointment_code": apt.appointment_code,
@@ -159,11 +193,31 @@ async def cancel_appointment(req: CancelBookingRequest):
 
 @router.post("/reschedule")
 async def reschedule_appointment(req: RescheduleBookingRequest):
-    """Reschedule an existing appointment."""
-    try:
-        apt = await db_client.reschedule_appointment(req.appointment_code, req.new_date, req.new_time)
+    """Reschedule or cancel an existing appointment."""
+    code_or_mobile = req.appointment_code or req.appointment_code_or_mobile
+    if not code_or_mobile:
+        raise HTTPException(status_code=422, detail="Appointment code or mobile number is required.")
+
+    # If action is cancel, dispatch cancellation
+    if (req.action or "").lower() == "cancel":
+        apt = await db_client.cancel_appointment_by_code(code_or_mobile, req.reason)
         if not apt:
-            raise HTTPException(status_code=404, detail="Appointment code not found.")
+            raise HTTPException(status_code=404, detail=f"Appointment {code_or_mobile} not found.")
+        return {
+            "success": True,
+            "appointment_code": apt.appointment_code,
+            "status": apt.status,
+            "message": "Appointment has been cancelled.",
+        }
+
+    try:
+        from datetime import UTC, datetime, timedelta
+        tomorrow_str = (datetime.now(UTC) + timedelta(days=1)).strftime("%Y-%m-%d")
+        new_date = req.new_date or tomorrow_str
+        new_time = req.new_time or "10:00"
+        apt = await db_client.reschedule_appointment(code_or_mobile, new_date, new_time)
+        if not apt:
+            raise HTTPException(status_code=404, detail=f"Appointment {code_or_mobile} not found.")
         return {
             "success": True,
             "appointment_code": apt.appointment_code,

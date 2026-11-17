@@ -633,13 +633,16 @@ async def _enqueue_text_chat_completion(run_id: int) -> None:
     """Schedule integrations, webhooks, and billing for a completed text chat."""
     # Imported lazily so API route imports do not eagerly load the ARQ worker
     # task graph.
-    from api.tasks.arq import enqueue_job
+    try:
+        from api.tasks.arq import enqueue_job
 
-    await enqueue_job(
-        FunctionNames.PROCESS_WORKFLOW_COMPLETION,
-        run_id,
-        _job_id=f"workflow-completion-{run_id}",
-    )
+        await enqueue_job(
+            FunctionNames.PROCESS_WORKFLOW_COMPLETION,
+            run_id,
+            _job_id=f"workflow-completion-{run_id}",
+        )
+    except Exception as e:
+        logger.error(f"Failed to enqueue completion job for run {run_id}: {e}")
 
 
 def _text_chat_duration_seconds(

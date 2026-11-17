@@ -188,6 +188,28 @@ class _ToolDocumentRefsMixin(BaseModel):
         default=None,
         spec_exclude=True,
     )
+    tools: Optional[List[str]] = spec_field(
+        default=None,
+        spec_exclude=True,
+    )
+    documents: Optional[List[str]] = spec_field(
+        default=None,
+        spec_exclude=True,
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def populate_tool_document_aliases(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if not data.get("tool_uuids") and data.get("tools"):
+                data["tool_uuids"] = data["tools"]
+            if not data.get("tools") and data.get("tool_uuids"):
+                data["tools"] = data["tool_uuids"]
+            if not data.get("document_uuids") and data.get("documents"):
+                data["document_uuids"] = data["documents"]
+            if not data.get("documents") and data.get("document_uuids"):
+                data["documents"] = data["document_uuids"]
+        return data
 
 
 @node_spec(

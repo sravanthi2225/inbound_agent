@@ -43,13 +43,17 @@ async def _upload_bytes(
 ) -> bool:
     try:
         logger.debug(f"{label} size: {len(data)} bytes")
-        if await storage_fs.acreate_file_from_bytes(storage_key, data):
-            logger.info(f"Successfully uploaded {label}: {storage_key}")
-            return True
+        async with asyncio.timeout(3.0):
+            if await storage_fs.acreate_file_from_bytes(storage_key, data):
+                logger.info(f"Successfully uploaded {label}: {storage_key}")
+                return True
         logger.error(
             f"Storage backend rejected {label} upload for workflow "
             f"{workflow_run_id}: {storage_key}"
         )
+        return False
+    except TimeoutError:
+        logger.warning(f"Storage upload timed out after 3.0s for {label} (run_id={workflow_run_id}); continuing cleanly.")
         return False
     except Exception as e:
         logger.error(f"Error uploading {label} for workflow {workflow_run_id}: {e}")

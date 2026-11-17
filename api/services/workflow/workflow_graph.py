@@ -137,8 +137,8 @@ class Node:
         )
         self.delayed_start = getattr(data, "delayed_start", False)
         self.delayed_start_duration = getattr(data, "delayed_start_duration", None)
-        self.tool_uuids = getattr(data, "tool_uuids", None)
-        self.document_uuids = getattr(data, "document_uuids", None)
+        self.tool_uuids = getattr(data, "tool_uuids", None) or getattr(data, "tools", None)
+        self.document_uuids = getattr(data, "document_uuids", None) or getattr(data, "documents", None)
         self.mcp_tool_filters = getattr(data, "mcp_tool_filters", None)
         mode = getattr(data, "pre_call_fetch_mode", PreCallFetchMode.disabled)
         self.pre_call_fetch_mode = mode.value if hasattr(mode, "value") else mode

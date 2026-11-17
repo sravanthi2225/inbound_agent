@@ -294,9 +294,15 @@ class AppointmentClient(BaseDBClient):
         appointment_code: str,
         reason: Optional[str] = None,
     ) -> Optional[AppointmentModel]:
-        """Cancel an appointment using its customer-facing code (e.g. APT-B2841)."""
+        """Cancel an appointment using its customer-facing code (e.g. APT-B2841) or customer phone."""
         async with self.async_session() as session:
-            stmt = select(AppointmentModel).where(AppointmentModel.appointment_code == appointment_code)
+            stmt = select(AppointmentModel).where(
+                or_(
+                    AppointmentModel.appointment_code == appointment_code,
+                    AppointmentModel.customer_phone == appointment_code,
+                    AppointmentModel.customer_phone == f"+{appointment_code.lstrip('+')}",
+                )
+            ).order_by(desc(AppointmentModel.id)).limit(1)
             res = await session.execute(stmt)
             appointment = res.scalar_one_or_none()
             if not appointment:
@@ -332,7 +338,13 @@ class AppointmentClient(BaseDBClient):
     ) -> Optional[AppointmentModel]:
         """Reschedule an existing appointment to a new date and time."""
         async with self.async_session() as session:
-            stmt = select(AppointmentModel).where(AppointmentModel.appointment_code == appointment_code)
+            stmt = select(AppointmentModel).where(
+                or_(
+                    AppointmentModel.appointment_code == appointment_code,
+                    AppointmentModel.customer_phone == appointment_code,
+                    AppointmentModel.customer_phone == f"+{appointment_code.lstrip('+')}",
+                )
+            ).order_by(desc(AppointmentModel.id)).limit(1)
             res = await session.execute(stmt)
             appointment = res.scalar_one_or_none()
             if not appointment:

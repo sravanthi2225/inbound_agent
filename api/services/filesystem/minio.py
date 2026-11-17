@@ -49,9 +49,15 @@ class MinioFileSystem(BaseFileSystem):
         self.access_key = access_key
         self.secret_key = secret_key
 
-        # Client for internal operations (uploads, etc.)
+        # Client for internal operations (uploads, etc.) with non-blocking timeouts
+        import urllib3
+        timeout_client = urllib3.PoolManager(
+            timeout=urllib3.Timeout(connect=1.5, read=3.0),
+            retries=urllib3.Retry(total=1, backoff_factor=0.2)
+        )
         self.client = Minio(
-            endpoint, access_key=access_key, secret_key=secret_key, secure=secure
+            endpoint, access_key=access_key, secret_key=secret_key, secure=secure,
+            http_client=timeout_client
         )
         self._bucket_initialized = False
 
