@@ -799,17 +799,21 @@ export const useWebSocketRTC = ({ workflowId, workflowRunId, accessToken, initia
             timeStartRef.current = null;
             const pc = createPeerConnection();
 
-            // Set up media constraints
+            // Set up media constraints with acoustic echo cancellation, noise suppression, and AGC
             const constraints: MediaStreamConstraints = {
                 audio: false,
             };
 
             if (useAudio) {
-                const audioConstraints: MediaTrackConstraints = {};
+                const audioConstraints: MediaTrackConstraints = {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                };
                 if (selectedAudioInput) {
                     audioConstraints.deviceId = { exact: selectedAudioInput };
                 }
-                constraints.audio = Object.keys(audioConstraints).length ? audioConstraints : true;
+                constraints.audio = audioConstraints;
             }
 
             // Get user media and negotiate

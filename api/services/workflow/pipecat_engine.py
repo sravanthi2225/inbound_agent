@@ -1812,6 +1812,10 @@ class PipecatEngine:
             return True
 
         if self.speech_playback.greeting_pending or self.greeting.awaiting_turn:
+            # If the current node explicitly disallows interruption, mute during greeting playback
+            # to prevent acoustic echo / feedback from speakers triggering false user turns.
+            if self.active_agent.current_node and not getattr(self.active_agent.current_node, "allow_interrupt", True):
+                return True
             return False
 
         # Keep caller turns live while a committed answer verdict waits for the
